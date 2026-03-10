@@ -165,8 +165,12 @@ def enviar_telegram(mensagem):
 
 
 if __name__ == "__main__":
+    import json
     print("🔍 Buscando previsão do tempo para Torres, RS...")
     data = get_previsao()
+    
+    print(json.dumps(data, indent=2, ensure_ascii=False))
+    
     msg = montar_mensagem(data)
     print(msg)
     enviar_telegram(msg)

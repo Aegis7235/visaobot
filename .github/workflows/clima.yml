@@ -1,0 +1,29 @@
+name: Bot Clima Torres
+
+on:
+  schedule:
+    - cron: '0 10 * * *'   # 07h BRT (UTC-3)
+    - cron: '0 21 * * *'   # 18h BRT (UTC-3)
+  workflow_dispatch:        # Permite rodar manualmente pelo GitHub
+
+jobs:
+  enviar-previsao:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar dependências
+        run: pip install -r requirements.txt
+
+      - name: Rodar bot
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python bot.py

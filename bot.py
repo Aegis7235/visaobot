@@ -91,62 +91,83 @@ def weather_desc(code):
     return descs.get(code, "Condição desconhecida")
 
 
-def analisar_alertas(daily, idx):
+def resumo_periodo(hourly, indices):
+    chuva_prob = max(hourly["precipitation_probability"][i] for i in indices)
+    chuva_mm = sum(hourly["precipitation"][i] for i in indices)
+    vento_max = max(hourly["windspeed_10m"][i] for i in indices)
+    rajada_max = max(hourly["windgusts_10m"][i] for i in indices)
+    temp_vals = [hourly["temperature_2m"][i] for i in indices]
+    codes = [hourly["weathercode"][i] for i in indices]
+    return {
+        "chuva_prob": chuva_prob,
+        "chuva_mm": chuva_mm,
+        "vento_max": vento_max,
+        "rajada_max": rajada_max,
+        "temp_min": min(temp_vals),
+        "temp_max": max(temp_vals),
+        "code": max(codes)
+    }
+
+
+def alertas_periodo(periodo, nome):
     alertas = []
-    prob_chuva = daily["precipitation_probability_max"][idx]
-    chuva_mm = daily["precipitation_sum"][idx]
-    vento_max = daily["windspeed_10m_max"][idx]
-    rajada_max = daily["windgusts_10m_max"][idx]
-    code = daily["weathercode"][idx]
-
-    if prob_chuva >= 70 and chuva_mm >= 10:
-        alertas.append(f"🌧️ *CHUVA SIGNIFICATIVA* — {chuva_mm:.1f}mm esperados ({prob_chuva}% de chance)")
-    elif prob_chuva >= 50:
-        alertas.append(f"🌦️ *Possibilidade de chuva* — {prob_chuva}% de chance ({chuva_mm:.1f}mm)")
-
-    if rajada_max >= 60:
-        alertas.append(f"💨 *VENTO FORTE* — rajadas de até {rajada_max:.0f} km/h (vento médio {vento_max:.0f} km/h)")
-    elif vento_max >= 40:
-        alertas.append(f"🌬️ *Vento moderado* — até {vento_max:.0f} km/h")
-
-    if code in [95, 96, 99]:
-        alertas.append("⛈️ *ALERTA DE TEMPESTADE*")
-
+    if periodo["chuva_prob"] >= 70 and periodo["chuva_mm"] >= 5:
+        alertas.append(f"🌧️ *CHUVA FORTE* {nome} — {periodo['chuva_mm']:.1f}mm ({periodo['chuva_prob']}%)")
+    elif periodo["chuva_prob"] >= 50:
+        alertas.append(f"🌦️ *Chuva possível* {nome} — {periodo['chuva_prob']}% de chance")
+    if periodo["rajada_max"] >= 60:
+        alertas.append(f"💨 *VENTO FORTE* {nome} — rajadas de {periodo['rajada_max']:.0f} km/h")
+    if periodo["code"] in [95, 96, 99]:
+        alertas.append(f"⛈️ *TEMPESTADE* {nome}")
     return alertas
 
 
 def montar_mensagem(data):
+    hourly = data["hourly"]
     daily = data["daily"]
     hoje = datetime.now()
+
+    periodos = {
+        "🌅 Madrugada (00h–06h)": list(range(0, 6)),
+        "🌄 Manhã (06h–12h)":     list(range(6, 12)),
+        "☀️ Tarde (12h–18h)":     list(range(12, 18)),
+        "🌙 Noite (18h–00h)":     list(range(18, 24)),
+    }
+
+    t_max = daily["temperature_2m_max"][0]
+    t_min = daily["temperature_2m_min"][0]
+    code_dia = daily["weathercode"][0]
+    emoji_dia = weather_emoji(code_dia)
+    desc_dia = weather_desc(code_dia)
 
     msg = "🏖️ *Previsão do Tempo — Torres, RS*\n"
     msg += f"📅 {hoje.strftime('%d/%m/%Y às %H:%M')}\n"
     msg += "━━━━━━━━━━━━━━━━━━━━\n\n"
+    msg += f"{emoji_dia} *Hoje — {hoje.strftime('%d/%m')}*\n"
+    msg += f"   🌡️ {t_min:.0f}°C – {t_max:.0f}°C  |  {desc_dia}\n\n"
 
-    code = daily["weathercode"][0]
-    t_max = daily["temperature_2m_max"][0]
-    t_min = daily["temperature_2m_min"][0]
-    prob_chuva = daily["precipitation_probability_max"][0]
-    chuva_mm = daily["precipitation_sum"][0]
-    vento = daily["windspeed_10m_max"][0]
-    rajada = daily["windgusts_10m_max"][0]
+    todos_alertas = []
 
-    emoji = weather_emoji(code)
-    desc = weather_desc(code)
+    for nome, indices in periodos.items():
+        p = resumo_periodo(hourly, indices)
+        emoji = weather_emoji(p["code"])
+        desc = weather_desc(p["code"])
+        nome_curto = nome.split("(")[0].strip().split(" ", 1)[1].strip()
 
-    msg += f"{emoji} *Hoje — {hoje.strftime('%d/%m')}*\n"
-    msg += f"   🌡️ {t_min:.0f}°C – {t_max:.0f}°C\n"
-    msg += f"   ☁️ {desc}\n"
-    msg += f"   🌧️ Chuva: {prob_chuva}% chance / {chuva_mm:.1f}mm\n"
-    msg += f"   💨 Vento: {vento:.0f} km/h (rajadas {rajada:.0f} km/h)\n"
+        msg += f"{nome}\n"
+        msg += f"   {emoji} {desc}\n"
+        msg += f"   🌡️ {p['temp_min']:.0f}°C – {p['temp_max']:.0f}°C\n"
+        msg += f"   🌧️ Chuva: {p['chuva_prob']}% / {p['chuva_mm']:.1f}mm\n"
+        msg += f"   💨 Vento: {p['vento_max']:.0f} km/h (rajadas {p['rajada_max']:.0f} km/h)\n\n"
 
-    alertas = analisar_alertas(daily, 0)
-    if alertas:
-        msg += f"\n   ⚠️ *Alertas:*\n"
-        for a in alertas:
-            msg += f"      • {a}\n"
-        msg += "\n━━━━━━━━━━━━━━━━━━━━\n"
-        msg += "⚠️ *Fique atento aos alertas acima!*\n"
+        todos_alertas += alertas_periodo(p, nome_curto)
+
+    if todos_alertas:
+        msg += "━━━━━━━━━━━━━━━━━━━━\n"
+        msg += "⚠️ *ALERTAS DO DIA:*\n"
+        for a in todos_alertas:
+            msg += f"   • {a}\n"
+        msg += "━━━━━━━━━━━━━━━━━━━━\n"
 
     msg += "\n_Fonte: Open-Meteo | Torres, RS_"
     return msg
@@ -165,12 +186,8 @@ def enviar_telegram(mensagem):
 
 
 if __name__ == "__main__":
-    import json
     print("🔍 Buscando previsão do tempo para Torres, RS...")
     data = get_previsao()
-    
-    print(json.dumps(data, indent=2, ensure_ascii=False))
-    
     msg = montar_mensagem(data)
     print(msg)
     enviar_telegram(msg)

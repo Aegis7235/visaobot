@@ -128,10 +128,10 @@ def montar_mensagem(data):
     hoje = datetime.now()
 
     periodos = {
-        "🌅 Madrugada (00h–06h)": list(range(0, 6)),
-        "🌄 Manhã (06h–12h)":     list(range(6, 12)),
-        "☀️ Tarde (12h–18h)":     list(range(12, 18)),
-        "🌙 Noite (18h–00h)":     list(range(18, 24)),
+        "🌅 *〔 MADRUGADA 〕* 00h – 06h": list(range(0, 6)),
+        "🌄 *〔 MANHÃ 〕* 06h – 12h":     list(range(6, 12)),
+        "☀️ *〔 TARDE 〕* 12h – 18h":     list(range(12, 18)),
+        "🌙 *〔 NOITE 〕* 18h – 00h":     list(range(18, 24)),
     }
 
     t_max = daily["temperature_2m_max"][0]
@@ -154,7 +154,7 @@ def montar_mensagem(data):
         desc = weather_desc(p["code"])
         nome_curto = nome.split("(")[0].strip().split(" ", 1)[1].strip()
 
-        msg += f"{nome}\n"
+        msg += f"▸ {nome}\n"
         msg += f"   {emoji} {desc}\n"
         msg += f"   🌡️ {p['temp_min']:.0f}°C – {p['temp_max']:.0f}°C\n"
         msg += f"   🌧️ Chuva: {p['chuva_prob']}% / {p['chuva_mm']:.1f}mm\n"

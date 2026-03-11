@@ -1,6 +1,7 @@
 import requests
 import os
-from datetime import datetime
+import sys
+from datetime import datetime, timezone, timedelta
 
 # Config
 TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
@@ -9,6 +10,14 @@ TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 # Torres, RS — coordenadas
 LAT = -29.3347
 LON = -49.7256
+
+# Limites para alerta urgente
+LIMITE_RAJADA_URGENTE = 60    # km/h
+LIMITE_CHUVA_PROB = 80        # %
+LIMITE_CHUVA_MM = 10          # mm nas próximas 3h
+
+# Arquivo de controle anti-spam
+ARQUIVO_ULTIMO_ALERTA = "ultimo_alerta.txt"
 
 
 def get_previsao():
@@ -140,11 +149,13 @@ def montar_mensagem(data):
     emoji_dia = weather_emoji(code_dia)
     desc_dia = weather_desc(code_dia)
 
-    msg = "🏖️ *Previsão do Tempo — Torres, RS*\n"
-    msg += f"📅 {hoje.strftime('%d/%m/%Y às %H:%M')}\n"
+    dias_semana = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
+    dia_semana = dias_semana[hoje.weekday()]
+
+    msg = "🏖️ *Previsão: Torres, RS*\n"
+    msg += f"📅 {dia_semana}, {hoje.strftime('%d/%m/%Y')}\n\n"
+    msg += f"🌡️ {t_min:.0f}°C – {t_max:.0f}°C  |  {desc_dia}\n"
     msg += "━━━━━━━━━━━━━━━━━━━━\n\n"
-    msg += f"{emoji_dia} *Hoje — {hoje.strftime('%d/%m')}*\n"
-    msg += f"   🌡️ {t_min:.0f}°C – {t_max:.0f}°C  |  {desc_dia}\n\n"
 
     todos_alertas = []
 
@@ -173,6 +184,80 @@ def montar_mensagem(data):
     return msg
 
 
+# ─────────────────────────────────────────
+# ALERTA URGENTE
+# ─────────────────────────────────────────
+
+def hora_atual_brt():
+    brt = timezone(timedelta(hours=-3))
+    return datetime.now(brt)
+
+
+def ja_alertou_recentemente():
+    """Verifica se já enviou alerta nas últimas 3 horas."""
+    if not os.path.exists(ARQUIVO_ULTIMO_ALERTA):
+        return False
+    try:
+        with open(ARQUIVO_ULTIMO_ALERTA, "r") as f:
+            conteudo = f.read().strip()
+        ultimo = datetime.fromisoformat(conteudo)
+        ultimo = ultimo.replace(tzinfo=timezone(timedelta(hours=-3)))
+        agora = hora_atual_brt()
+        diff = agora - ultimo
+        return diff.total_seconds() < 3 * 3600  # 3 horas
+    except Exception:
+        return False
+
+
+def salvar_timestamp_alerta():
+    agora = hora_atual_brt()
+    with open(ARQUIVO_ULTIMO_ALERTA, "w") as f:
+        f.write(agora.isoformat())
+
+
+def verificar_alerta_urgente(data):
+    """Olha as próximas 3 horas e detecta condições críticas."""
+    hourly = data["hourly"]
+    agora = hora_atual_brt()
+    hora_atual = agora.hour
+
+    # Próximas 3 horas
+    indices = [hora_atual, hora_atual + 1, hora_atual + 2]
+    indices = [i for i in indices if i < 24]
+
+    problemas = []
+
+    for i in indices:
+        hora_str = hourly["time"][i][11:16]  # ex: "15:00"
+        code = hourly["weathercode"][i]
+        rajada = hourly["windgusts_10m"][i]
+        chuva_prob = hourly["precipitation_probability"][i]
+        chuva_mm = hourly["precipitation"][i]
+
+        if code in [95, 96, 99]:
+            problemas.append(f"   ⛈️ *{weather_desc(code)}* às {hora_str}")
+        if rajada >= LIMITE_RAJADA_URGENTE:
+            problemas.append(f"   💨 *Rajadas de {rajada:.0f} km/h* às {hora_str}")
+        if chuva_prob >= LIMITE_CHUVA_PROB and chuva_mm >= LIMITE_CHUVA_MM:
+            problemas.append(f"   🌧️ *Chuva forte {chuva_mm:.1f}mm ({chuva_prob}%)* às {hora_str}")
+
+    return problemas
+
+
+def montar_mensagem_urgente(problemas):
+    agora = hora_atual_brt()
+    msg = "🚨 *ALERTA URGENTE — Torres, RS*\n"
+    msg += f"📅 {agora.strftime('%d/%m/%Y às %H:%M')}\n"
+    msg += "━━━━━━━━━━━━━━━━━━━━\n\n"
+    msg += "⚠️ *Condição severa detectada nas próximas horas:*\n\n"
+    for p in problemas:
+        msg += f"{p}\n"
+    msg += "\n━━━━━━━━━━━━━━━━━━━━\n"
+    msg += "🔴 *Tome precauções!*\n"
+    msg += "\n_Fonte: Open-Meteo | Torres, RS_"
+    return msg
+
+
 def enviar_telegram(mensagem):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     payload = {
@@ -185,9 +270,35 @@ def enviar_telegram(mensagem):
     print("✅ Mensagem enviada com sucesso!")
 
 
+# ─────────────────────────────────────────
+# MAIN
+# ─────────────────────────────────────────
+
 if __name__ == "__main__":
-    print("🔍 Buscando previsão do tempo para Torres, RS...")
+    modo = sys.argv[1] if len(sys.argv) > 1 else "resumo"
+
+    print(f"🔍 Modo: {modo}")
     data = get_previsao()
-    msg = montar_mensagem(data)
-    print(msg)
-    enviar_telegram(msg)
+
+    if modo == "resumo":
+        # Resumo diário normal (7h e 18h)
+        print("📋 Montando resumo diário...")
+        msg = montar_mensagem(data)
+        print(msg)
+        enviar_telegram(msg)
+
+    elif modo == "alerta":
+        # Verificação de alerta urgente (a cada hora)
+        print("🔎 Verificando condições críticas...")
+        problemas = verificar_alerta_urgente(data)
+
+        if not problemas:
+            print("✅ Sem condições críticas nas próximas 3 horas.")
+        elif ja_alertou_recentemente():
+            print("⏸️ Alerta já enviado nas últimas 3 horas. Pulando.")
+        else:
+            print(f"🚨 {len(problemas)} problema(s) detectado(s)! Enviando alerta...")
+            msg = montar_mensagem_urgente(problemas)
+            print(msg)
+            enviar_telegram(msg)
+            salvar_timestamp_alerta()

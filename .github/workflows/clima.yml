@@ -3,7 +3,6 @@ name: Bot Clima Torres
 on:
   schedule:
     - cron: '0 10 * * *'    # Resumo às 07h BRT
-    - cron: '0 21 * * *'    # Resumo às 18h BRT
     - cron: '0 * * * *'     # Verificação de alerta urgente a cada hora
   workflow_dispatch:
     inputs:
@@ -22,10 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     if: |
       github.event_name == 'workflow_dispatch' && github.event.inputs.modo == 'resumo' ||
-      github.event_name == 'schedule' && (
-        github.event.schedule == '0 10 * * *' ||
-        github.event.schedule == '0 21 * * *'
-      )
+      github.event_name == 'schedule' && github.event.schedule == '0 10 * * *'
     steps:
       - name: Checkout
         uses: actions/checkout@v4

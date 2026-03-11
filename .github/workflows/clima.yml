@@ -2,19 +2,35 @@ name: Bot Clima Torres
 
 on:
   schedule:
-    - cron: '0 10 * * *'   # 07h BRT (UTC-3)
-    - cron: '0 21 * * *'   # 18h BRT (UTC-3)
-  workflow_dispatch:        # Permite rodar manualmente pelo GitHub
+    - cron: '0 10 * * *'    # Resumo às 07h BRT
+    - cron: '0 21 * * *'    # Resumo às 18h BRT
+    - cron: '0 * * * *'     # Verificação de alerta urgente a cada hora
+  workflow_dispatch:
+    inputs:
+      modo:
+        description: 'Modo de execução'
+        required: true
+        default: 'resumo'
+        type: choice
+        options:
+          - resumo
+          - alerta
 
 jobs:
-  enviar-previsao:
+  resumo-diario:
+    name: Resumo Diário
     runs-on: ubuntu-latest
-
+    if: |
+      github.event_name == 'workflow_dispatch' && github.event.inputs.modo == 'resumo' ||
+      github.event_name == 'schedule' && (
+        github.event.schedule == '0 10 * * *' ||
+        github.event.schedule == '0 21 * * *'
+      )
     steps:
-      - name: Checkout do repositório
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python 3.11
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -22,8 +38,32 @@ jobs:
       - name: Instalar dependências
         run: pip install -r requirements.txt
 
-      - name: Rodar bot
+      - name: Enviar resumo
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python bot.py
+        run: python bot.py resumo
+
+  alerta-urgente:
+    name: Verificar Alerta Urgente
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_dispatch' && github.event.inputs.modo == 'alerta' ||
+      github.event_name == 'schedule' && github.event.schedule == '0 * * * *'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar dependências
+        run: pip install -r requirements.txt
+
+      - name: Verificar e alertar
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python bot.py alerta

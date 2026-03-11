@@ -134,7 +134,7 @@ def alertas_periodo(periodo, nome):
 def montar_mensagem(data):
     hourly = data["hourly"]
     daily = data["daily"]
-    hoje = datetime.now()
+    hoje = datetime.now(timezone(timedelta(hours=-3)))
 
     periodos = {
         "🌅 *〔 MADRUGADA 〕* 00h – 06h": list(range(0, 6)),

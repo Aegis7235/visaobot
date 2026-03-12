@@ -121,13 +121,13 @@ def resumo_periodo(hourly, indices):
 def alertas_periodo(periodo, nome):
     alertas = []
     if periodo["chuva_prob"] >= 70 and periodo["chuva_mm"] >= 5:
-        alertas.append(f"🌧️ *CHUVA FORTE* {nome} — {periodo['chuva_mm']:.1f}mm ({periodo['chuva_prob']}%)")
+        alertas.append(f"🌧️ *Chance de chuva forte* {nome} — {periodo['chuva_mm']:.1f}mm ({periodo['chuva_prob']}%)")
     elif periodo["chuva_prob"] >= 50:
         alertas.append(f"🌦️ *Chuva possível* {nome} — {periodo['chuva_prob']}% de chance")
     if periodo["rajada_max"] >= 60:
-        alertas.append(f"💨 *VENTO FORTE* {nome} — rajadas de {periodo['rajada_max']:.0f} km/h")
+        alertas.append(f"💨 *Chance de vento forte* {nome} — rajadas de até {periodo['rajada_max']:.0f} km/h")
     if periodo["code"] in [95, 96, 99]:
-        alertas.append(f"⛈️ *TEMPESTADE* {nome}")
+        alertas.append(f"⛈️ *Chance de tempestade* {nome}")
     return alertas
 
 
@@ -235,11 +235,11 @@ def verificar_alerta_urgente(data):
         chuva_mm = hourly["precipitation"][i]
 
         if code in [95, 96, 99]:
-            problemas.append(f"   ⛈️ *{weather_desc(code)}* às {hora_str}")
+            problemas.append(f"   ⛈️ *Chance de tempestade* às {hora_str}")
         if rajada >= LIMITE_RAJADA_URGENTE:
-            problemas.append(f"   💨 *Rajadas de {rajada:.0f} km/h* às {hora_str}")
+            problemas.append(f"   💨 *Chance de vento forte* às {hora_str} — rajadas de até {rajada:.0f} km/h")
         if chuva_prob >= LIMITE_CHUVA_PROB and chuva_mm >= LIMITE_CHUVA_MM:
-            problemas.append(f"   🌧️ *Chuva forte {chuva_mm:.1f}mm ({chuva_prob}%)* às {hora_str}")
+            problemas.append(f"   🌧️ *Chance de chuva forte* às {hora_str} — {chuva_mm:.1f}mm ({chuva_prob}%)")
 
     return problemas
 
@@ -249,11 +249,11 @@ def montar_mensagem_urgente(problemas):
     msg = "🚨 *ALERTA URGENTE — Torres, RS*\n"
     msg += f"📅 {agora.strftime('%d/%m/%Y às %H:%M')}\n"
     msg += "━━━━━━━━━━━━━━━━━━━━\n\n"
-    msg += "⚠️ *Condição severa detectada nas próximas horas:*\n\n"
+    msg += "⚠️ *Condição desfavorável prevista nas próximas horas:*\n\n"
     for p in problemas:
         msg += f"{p}\n"
     msg += "\n━━━━━━━━━━━━━━━━━━━━\n"
-    msg += "🔴 *Tome precauções!*\n"
+    msg += "🟡 *Fique atento às condições do tempo!*\n"
     msg += "\n_Fonte: Open-Meteo | Torres, RS_"
     return msg
 
